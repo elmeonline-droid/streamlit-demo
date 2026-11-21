@@ -21,11 +21,52 @@ DEFAULT_SOURCE = {"sheet_id": "1A8St9uqgQuXdHCgqqdRpxnTni-b0KymqyD_Hez5I64w",
 TIMEZONE = "America/New_York"
 REFRESH_SECONDS = 300
 
-BLUE, RED, GREEN = "#4285F4", "#EA4335", "#34A853"
-LIGHT_BLUE, ORANGE, BLACK = "#8AB4F8", "#F29900", "#000000"
-GROUP_COLORS = {1: BLUE, 2: RED, 3: GREEN}
+# Chart colors per mode (Google Sheets light chart colors / Google dark-theme equivalents)
+PALETTES = {
+    "light": dict(BLUE="#4285F4", RED="#EA4335", GREEN="#34A853", LIGHT_BLUE="#8AB4F8", ORANGE="#F29900",
+                  BLACK="#000000", BG="#FFFFFF", TEXT="#202124", MUTED="#5F6368", GRID="#E8EAED", DOMAIN="#BDC1C6"),
+    "dark": dict(BLUE="#8AB4F8", RED="#F28B82", GREEN="#81C995", LIGHT_BLUE="#4A6A9C", ORANGE="#FDD663",
+                 BLACK="#E8EAED", BG="#1E1F20", TEXT="#E8EAED", MUTED="#9AA0A6", GRID="#3C4043", DOMAIN="#5F6368"),
+}
+BLUE = RED = GREEN = LIGHT_BLUE = ORANGE = BLACK = BG = TEXT = MUTED = GRID = DOMAIN = ""
+GROUP_COLORS: dict = {}
+
+
+def apply_palette(mode: str) -> None:
+    global BLUE, RED, GREEN, LIGHT_BLUE, ORANGE, BLACK, BG, TEXT, MUTED, GRID, DOMAIN, GROUP_COLORS
+    p = PALETTES[mode]
+    BLUE, RED, GREEN, LIGHT_BLUE, ORANGE, BLACK = p["BLUE"], p["RED"], p["GREEN"], p["LIGHT_BLUE"], p["ORANGE"], p["BLACK"]
+    BG, TEXT, MUTED, GRID, DOMAIN = p["BG"], p["TEXT"], p["MUTED"], p["GRID"], p["DOMAIN"]
+    GROUP_COLORS = {1: BLUE, 2: RED, 3: GREEN}
+
+
+# Page restyle for dark mode (Streamlit's own theme can't be switched from code)
+DARK_CSS = """
+<style>
+.stApp, [data-testid="stHeader"] { background: #131314; color: #E8EAED; }
+[data-testid="stSidebar"] { background: #1E1F20; }
+.stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp label, .stApp li,
+[data-testid="stMetricValue"], [data-testid="stMetricLabel"] p, [data-testid="stWidgetLabel"] p { color: #E8EAED; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: #9AA0A6; }
+[data-testid="stVerticalBlockBorderWrapper"], div[data-testid="stVerticalBlock"][height] { border-color: #3C4043 !important; }
+.stApp hr { border-color: #3C4043; }
+.stApp input, [data-baseweb="input"], [data-baseweb="base-input"] { background: #2A2B2D !important; color: #E8EAED !important; }
+.stApp button { background: #2A2B2D; color: #E8EAED; border-color: #5F6368; }
+.stApp button:hover { border-color: #8AB4F8; color: #8AB4F8; }
+[data-testid="stToolbar"] button, [data-testid="stHeader"] svg { color: #E8EAED; fill: #E8EAED; }
+</style>
+"""
 
 st.set_page_config(page_title="Feed Dashboard", page_icon="🌾", layout="wide")
+
+
+def default_dark() -> bool:
+    if "theme" in st.query_params:
+        return st.query_params["theme"] == "dark"
+    try:
+        return st.context.theme.type == "dark"   # follow the viewer's system/browser setting
+    except Exception:
+        return False
 
 
 def source() -> dict:
@@ -79,15 +120,15 @@ def time_x(fmt: str = "%-I %p") -> alt.X:
 
 def finish(chart, title: str, height: int):
     return chart.properties(title=alt.TitleParams(title, anchor="start", fontSize=15, fontWeight="normal",
-                                                  color="#202124"), height=height)
+                                                  color=TEXT), height=height)
 
 
 def show(chart) -> None:
     st.altair_chart(
-        chart.configure(background="white", font="Roboto, Arial, sans-serif")
+        chart.configure(background=BG, font="Roboto, Arial, sans-serif")
         .configure_view(stroke=None)
-        .configure_axis(labelColor="#5f6368", titleColor="#5f6368", gridColor="#e8eaed", domainColor="#bdc1c6")
-        .configure_legend(orient="bottom", title=None, labelColor="#202124"),
+        .configure_axis(labelColor=MUTED, titleColor=MUTED, gridColor=GRID, domainColor=DOMAIN)
+        .configure_legend(orient="bottom", title=None, labelColor=TEXT),
         use_container_width=True, theme=None)
 
 
@@ -123,10 +164,12 @@ def runout_section(scans, rounds, now, threshold) -> None:
         with col, st.container(border=True):
             st.markdown(f"**<span style='color:{GROUP_COLORS[g]}'>●</span> Group {g}**", unsafe_allow_html=True)
             a, b = st.columns(2)
-            if r.already_below:
-                a.metric("Below threshold since", fmt_time(r.runout))
+            label = "Below since" if r.already_below else "Runout"
+            if r.runout is None or pd.isna(r.runout):
+                a.metric(label, "—")
             else:
-                a.metric("Projected runout", fmt_time(r.runout))
+                day = "today" if r.runout.date() == now.date() else r.runout.strftime("%a")
+                a.metric(f"{label} ({day})", r.runout.strftime("%I:%M %p").lstrip("0"))
             b.metric("Height (in)", "—" if r.height is None else f"{r.height:.1f}")
             mins = "  ·  ".join(f"{f} {'—' if v is None else f'{v:.1f}'}" for f, v in r.fence_min_24h.items())
             st.caption(f"24hr minimum heights: {mins}")
@@ -187,15 +230,18 @@ def heifer_chart(scans, rounds, pen, now):
     long = ev.melt(id_vars=["i", "label"], value_vars=["dosing", "delivered", "scan"], var_name="series").dropna()
     long["series"] = long["series"].str.capitalize()
     x = slot_x(labels)
-    b = bars(long, x, {"Dosing": ORANGE, "Delivered": BLACK, "Scan": "#33A854"}, y_max=600)
+    b = bars(long, x, {"Dosing": ORANGE, "Delivered": BLACK, "Scan": GREEN}, y_max=600)
     empty = ev[ev["empty"].notna()]
-    e = alt.Chart(empty).mark_point(shape="triangle-up", size=90, filled=True, color="#EA4235").encode(
+    e = alt.Chart(empty).mark_point(shape="triangle-up", size=90, filled=True, color=RED).encode(
         x=mid(x), y="empty:Q", tooltip=[alt.Tooltip("label:N", title="Time"), alt.Tooltip("empty:Q", title="Empty")])
     return finish(alt.layer(b, e), f"{pen} - Dosing, delivered & scans (4 days)", 260)
 
 
 def heifer_section(scans, rounds, now) -> None:
-    st.caption("Orange = dosing · Black = delivered · Green = scan (inches × 12.5 ≈ lb) · Red ▲ at 0 = empty")
+    delivered = "White" if BG != PALETTES["light"]["BG"] else "Black"
+    dosing = "Yellow" if BG != PALETTES["light"]["BG"] else "Orange"
+    st.caption(f"{dosing} = dosing · {delivered} = delivered · Green = scan (inches × 12.5 ≈ lb) · "
+               "Red ▲ at 0 = empty")
     pens = feed.HEIFER_PENS
     for k in range(0, len(pens), 2):
         for col, pen in zip(st.columns(2), pens[k:k + 2]):
@@ -219,9 +265,15 @@ def fence_section(scans, now) -> None:
 
 
 # ---------- Page ----------
-st.title("🌾 Feed Dashboard")
 with st.sidebar:
+    dark = st.toggle("🌙 Dark mode", value=default_dark())
     threshold = st.number_input("Runout threshold (in)", value=0.98, step=0.1, format="%.2f")
+st.query_params["theme"] = "dark" if dark else "light"   # keep the choice in the link
+apply_palette("dark" if dark else "light")
+if dark:
+    st.markdown(DARK_CSS, unsafe_allow_html=True)
+
+st.title("🌾 Feed Dashboard")
 
 
 @st.fragment(run_every=REFRESH_SECONDS)
