@@ -11,17 +11,34 @@ st.title("🌾 Feed Levels: Last 7 Days")
 
 
 # ---------- Data ----------
+INTERVAL = "10min"  # one data point per bin every 10 minutes
+
+
+def to_interval(df: pd.DataFrame) -> pd.DataFrame:
+    """Average readings into 10-minute slots per bin (empty slots are left out, not invented)."""
+    return (
+        df.set_index("timestamp")
+        .groupby("bin")["level"]
+        .resample(INTERVAL)
+        .mean()
+        .dropna()
+        .round(1)
+        .reset_index()
+    )
+
+
 def sample_data(seed: int = 7) -> pd.DataFrame:
-    """Hourly readings for 3 bins over 7 days: steady draw-down with refills."""
+    """Readings every 10 minutes for 3 bins over 7 days: steady draw-down with refills."""
     rng = np.random.default_rng(seed)
-    end = datetime.now().replace(minute=0, second=0, microsecond=0)
-    times = pd.date_range(end=end, periods=7 * 24, freq="h")
+    now = datetime.now()
+    end = now.replace(minute=now.minute - now.minute % 10, second=0, microsecond=0)
+    times = pd.date_range(end=end, periods=7 * 24 * 6, freq=INTERVAL)
     rows = []
     for bin_name, start, use_per_hr in [("Bin 1", 85, 0.55), ("Bin 2", 60, 0.40), ("Bin 3", 95, 0.70)]:
         level = start
         for t in times:
-            level -= use_per_hr * rng.uniform(0.6, 1.4)
-            if level < 15 and rng.random() < 0.3:  # refill delivery
+            level -= use_per_hr / 6 * rng.uniform(0.6, 1.4)
+            if level < 15 and rng.random() < 0.06:  # refill delivery
                 level = rng.uniform(90, 100)
             level = max(level, 0)
             rows.append({"timestamp": t, "bin": bin_name, "level": round(level, 1)})
@@ -39,13 +56,13 @@ def load_csv(file) -> pd.DataFrame:
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df["bin"] = df["bin"].astype(str)
     df["level"] = pd.to_numeric(df["level"], errors="coerce")
-    return df.dropna(subset=["level"])
+    return to_interval(df.dropna(subset=["level"]))
 
 
 with st.sidebar:
     st.header("Data")
     uploaded = st.file_uploader("Upload CSV (timestamp, bin, level)", type="csv")
-    st.caption("No file? Sample data is shown.")
+    st.caption("No file? Sample data is shown. Readings are averaged into 10-minute points.")
     st.header("Settings")
     unit = st.text_input("Level unit", value="%")
     low_level = st.number_input(f"Low-level alarm ({unit})", value=20.0, step=5.0)
