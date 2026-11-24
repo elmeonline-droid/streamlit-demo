@@ -2,10 +2,12 @@
 
 Polls the source Google Sheet every 5 minutes; all calculations live in feed.py.
 """
+import base64
 import io
 import json
 import time
 import urllib.request
+from pathlib import Path
 
 import altair as alt
 import pandas as pd
@@ -57,7 +59,16 @@ DARK_CSS = """
 </style>
 """
 
-st.set_page_config(page_title="Feed Dashboard", page_icon="🌾", layout="wide")
+LOGO = Path(__file__).with_name("logo.jpg")
+LOGO_SRC = "data:image/jpeg;base64," + base64.b64encode(LOGO.read_bytes()).decode()
+
+
+def logo_title(text: str, tag: str) -> str:
+    return (f'<{tag} style="display:flex;align-items:center;gap:0.6rem">'
+            f'<img src="{LOGO_SRC}" alt="Central Manor Dairy" style="height:1.5em;border-radius:6px;margin-right:0.5em">{text}</{tag}>')
+
+
+st.set_page_config(page_title="Feed Dashboard", page_icon=str(LOGO), layout="wide")
 
 
 def default_dark() -> bool:
@@ -274,7 +285,7 @@ apply_palette("dark" if dark else "light")
 if dark:
     st.markdown(DARK_CSS, unsafe_allow_html=True)
 
-st.title("🌾 Feed Dashboard")
+st.markdown(logo_title("Feed Dashboard", "h1"), unsafe_allow_html=True)
 
 
 @st.fragment(run_every=REFRESH_SECONDS)

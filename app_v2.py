@@ -5,9 +5,11 @@ Below: tabs with the supporting charts (milking groups, fences, heifers, raw dat
 All numbers come from feed.py (computed from the raw scans + feed rounds).
 """
 import html
+import base64
 import io
 import time
 import urllib.request
+from pathlib import Path
 
 import altair as alt
 import pandas as pd
@@ -31,7 +33,16 @@ PALETTES = {
                  g1="#8AB4F8", g2="#F28B82", g3="#81C995", dosing="#FDD663", delivered="#E8EAED", scan="#81C995"),
 }
 
-st.set_page_config(page_title="Feed Status", page_icon="🌾", layout="wide", initial_sidebar_state="collapsed")
+LOGO = Path(__file__).with_name("logo.jpg")
+LOGO_SRC = "data:image/jpeg;base64," + base64.b64encode(LOGO.read_bytes()).decode()
+
+
+def logo_title(text: str, tag: str) -> str:
+    return (f'<{tag} style="display:flex;align-items:center;gap:0.6rem">'
+            f'<img src="{LOGO_SRC}" alt="Central Manor Dairy" style="height:1.5em;border-radius:6px;margin-right:0.5em">{text}</{tag}>')
+
+
+st.set_page_config(page_title="Feed Status", page_icon=str(LOGO), layout="wide", initial_sidebar_state="collapsed")
 
 
 # ---------- Data ----------
@@ -331,7 +342,7 @@ def heifer_chart(scans, rounds, pen, now, y_top, p):
 
 # ---------- Page ----------
 head = st.columns([5, 1.4, 1, 1], vertical_alignment="bottom")
-head[0].markdown("## 🌾 Feed status")
+head[0].markdown(logo_title("Feed status", "h2"), unsafe_allow_html=True)
 st.session_state.setdefault("threshold", 0.98)
 with head[1].popover(f"⚙ Threshold {st.session_state['threshold']:g} in", use_container_width=True):
     threshold = st.number_input("Runout threshold (in)", step=0.1, format="%.2f", key="threshold",
