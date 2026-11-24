@@ -151,7 +151,7 @@ def bars(df: pd.DataFrame, x: alt.X, colors: dict, y_max: float | None = None):
 
 def delivery_frame(rounds, start, n, labels, groups=(1, 2, 3)) -> pd.DataFrame:
     df = feed.delivered_slots(rounds, start, n, groups)
-    df["series"] = df["group"].map(lambda g: f"Milking {g}")
+    df["series"] = df["group"].map(lambda g: f"Milking {int(g)}")
     df["label"] = df["i"].map(lambda i: labels[i])
     return df
 
@@ -195,7 +195,8 @@ def group_section(scans, rounds, now) -> None:
 
         start = (now - pd.Timedelta(hours=24)).floor("20min")
         strip = delivery_frame(rounds, start, 72, labels, groups=(g,))
-        show(finish(bars(strip, slot_x(labels, every=3), {f"Milking {g}": GROUP_COLORS[g]}, y_max=60), "", 110))
+        top = max(60.0, float(strip["value"].max()) if len(strip) else 0.0)
+        show(finish(bars(strip, slot_x(labels, every=3), {f"Milking {g}": GROUP_COLORS[g]}, y_max=top), "", 110))
     st.caption("Line = total feed height of the group's 4 fences. Red = last 24 hours · light blue = the same "
                "hours on each of the previous 6 days · bars = feed delivered (36.04-lb units) per 20 minutes")
 

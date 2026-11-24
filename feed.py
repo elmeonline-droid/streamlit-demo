@@ -64,7 +64,7 @@ def clean_scans(raw: pd.DataFrame) -> pd.DataFrame:
     day = df["ts"].dt.normalize() - pd.to_timedelta((df["ts"].dt.hour < scan_td.dt.components.hours).astype(int), unit="D")
     df["t"] = day + scan_td
     df["inches"] = df["mm"] / MM_PER_IN
-    df["group"] = df["pen"].map(milking_group)
+    df["group"] = df["pen"].map(milking_group).astype("Int64")
     # The logger repeats the latest reading every cycle; keep each reading once
     df = df.sort_values("ts").drop_duplicates(["pen", "t"], keep="last")
     return df[["t", "pen", "group", "inches", "mm"]].sort_values("t").reset_index(drop=True)
@@ -80,7 +80,7 @@ def clean_rounds(raw: pd.DataFrame) -> pd.DataFrame:
     kg = (df["t"] >= KG_WINDOW[0]) & (df["t"] < KG_WINDOW[1])
     df.loc[kg, "lb"] = df.loc[kg, "lb"] / 2.20462
     df["pen"] = df["fence"].map(canonical_pen)
-    df["group"] = df["pen"].map(milking_group)
+    df["group"] = df["pen"].map(milking_group).astype("Int64")   # whole numbers; heifer rows stay empty
     return df[["t", "pen", "group", "lb"]].sort_values("t").reset_index(drop=True)
 
 
