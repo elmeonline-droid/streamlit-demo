@@ -64,8 +64,11 @@ LOGO_SRC = "data:image/jpeg;base64," + base64.b64encode(LOGO.read_bytes()).decod
 
 
 def logo_title(text: str, tag: str) -> str:
-    return (f'<{tag} style="display:flex;align-items:center;gap:0.6rem">'
-            f'<img src="{LOGO_SRC}" alt="Central Manor Dairy" style="height:1.5em;border-radius:6px;margin-right:0.5em">{text}</{tag}>')
+    # Title and logo shrink with the screen width so they fit on a phone
+    size = {"h1": "clamp(1.5rem, 7vw, 2.75rem)", "h2": "clamp(1.4rem, 6vw, 2.25rem)"}[tag]
+    return (f'<{tag} style="display:flex;align-items:center;font-size:{size};line-height:1.2">'
+            f'<img src="{LOGO_SRC}" alt="Central Manor Dairy" '
+            f'style="height:1.5em;width:auto;flex-shrink:0;border-radius:6px;margin-right:0.5em">{text}</{tag}>')
 
 
 st.set_page_config(page_title="Feed Dashboard", page_icon=str(LOGO), layout="wide")
